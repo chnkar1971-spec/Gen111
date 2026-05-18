@@ -1,4 +1,4 @@
- <!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="th">
 <head>
     <meta charset="UTF-8">
@@ -6,7 +6,6 @@
     <title>จำลอง 1 วัน... ชีวิตเด็กมหาลัย (Real Life Edition)</title>
     <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap" rel="stylesheet">
     
-    <!-- เพิ่ม Firebase SDK เวอร์ชัน 8 เข้ามาในโปรเจกต์ -->
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
 
@@ -157,7 +156,6 @@
     const db = firebase.database();
     // ---------------------------------------------------------
 
-    // โค้ดส่วนอื่นๆ (storyData และฟังก์ชันต่างๆ) ยังคงเหมือนเดิม
     const storyData = {
         arch: {
             name: "📐 สถาปัตยกรรมศาสตร์",
@@ -348,7 +346,7 @@
                     situation: "ก่อนกลับต้องล้างเครื่องแก้วเป็นกองพะเนิน ถ้ามีคราบมันเหลือโดนหักคะแนนแน่",
                     choices: [
                         { text: "ยืนขัดทีละใบอย่างประณีต กลัวไม่สะอาด", result: "สะอาดวิบวับ! แต่มือเปื่อย แสบสารเคมี และรถตู้เที่ยวสุดท้ายเกือบหมด" },
-                        { text: "รีบล้างรีบคว่ำ ล้างลวกๆ เน้นความไว", result: "จังหวะรีบจัด บีกเกอร์ลื่นหลุดมือแตกดัง 'เพล้ง!' เตรียมจ่ายตังค์ค่าเสียหายให้ภาควิชาได้เลย" }
+                        { text: "รีบล้างรีวคว่ำ ล้างลวกๆ เน้นความไว", result: "จังหวะรีบจัด บีกเกอร์ลื่นหลุดมือแตกดัง 'เพล้ง!' เตรียมจ่ายตังค์ค่าเสียหายให้ภาควิชาได้เลย" }
                     ]
                 },
                 {
@@ -365,3 +363,131 @@
             diff: "⭐️⭐️⭐️⭐️ (สู้ชีวิตด้วยหลักการทางวิทยาศาสตร์)"
         }
     };
+
+    // ---------------------------------------------------------
+    // 2. ส่วนลอจิกประมวลผลหน้าเว็บ (Render Logic) ที่หายไป
+    // ---------------------------------------------------------
+    const app = document.getElementById('app');
+    let currentFac = null;
+    let stepIndex = 0;
+
+    function updateProgress(percent) {
+        const pb = document.getElementById('progress-bar');
+        if (pb) pb.style.width = percent + '%';
+    }
+
+    function showHome() {
+        stepIndex = 0;
+        let html = `
+            <h1>🎓 จำลอง 1 วัน<br>ชีวิตเด็กมหาลัย</h1>
+            <div class="counter-box">
+                👥 มีคนมารับกรรมแล้ว: <strong id="player-count">กำลังโหลด...</strong> คน
+            </div>
+            <p style="text-align:center; color:#94a3b8; margin-bottom:25px;">สู้ชีวิตแต่ชีวิตสู้กลับ... ลองเลือกคณะที่อยากเข้าไปลองของดูดิ๊!</p>
+        `;
+        for (let key in storyData) {
+            html += `<button class="btn btn-center" onclick="showIntro('${key}')">${storyData[key].name}</button>`;
+        }
+        app.innerHTML = html;
+
+        // ดึงยอดคนเล่นมาจาก Firebase
+        if (db) {
+            db.ref('globalPlayCount').on('value', (snapshot) => {
+                const count = snapshot.val() || 0;
+                const countEl = document.getElementById('player-count');
+                if(countEl) countEl.innerText = count;
+            });
+        } else {
+            const countEl = document.getElementById('player-count');
+            if(countEl) countEl.innerText = "Error";
+        }
+    }
+
+    function showIntro(facKey) {
+        currentFac = storyData[facKey];
+        app.innerHTML = `
+            <div class="progress-container"><div id="progress-bar"></div></div>
+            <h2>${currentFac.name}</h2>
+            <div class="result-box" style="border-left-color: var(--primary);">${currentFac.intro}</div>
+            <button class="btn btn-center" style="margin-top:10px;" onclick="startGame()">เริ่มชีวิต 1 วัน ☀️</button>
+            <button class="back-btn" onclick="showHome()">⬅️ เปลี่ยนใจไปคณะอื่นดีกว่า</button>
+        `;
+        updateProgress(10);
+    }
+
+    function startGame() {
+        // เมื่อกดเริ่ม จะบวกยอดใน Firebase อัตโนมัติ
+        if(db) {
+            db.ref('globalPlayCount').set(firebase.database.ServerValue.increment(1));
+        }
+        nextStep();
+    }
+
+    function nextStep() {
+        if (stepIndex < currentFac.steps.length) {
+            const step = currentFac.steps[stepIndex];
+            app.innerHTML = `
+                <div class="progress-container"><div id="progress-bar" style="width:${(stepIndex + 1) * 20 + 10}%"></div></div>
+                <h2>${currentFac.name}</h2>
+                <div class="time-badge">⏰ ${step.time}</div>
+                <div class="situation-text">${step.situation}</div>
+                <button class="btn" onclick="showResult(0)">👉 ${step.choices[0].text}</button>
+                <button class="btn" onclick="showResult(1)">👉 ${step.choices[1].text}</button>
+            `;
+            stepIndex++;
+        } else {
+            showReality();
+        }
+    }
+
+    function showResult(choiceIdx) {
+        const resultText = currentFac.steps[stepIndex - 1].choices[choiceIdx].result;
+        app.innerHTML = `
+            <div class="progress-container"><div id="progress-bar" style="width:${stepIndex * 20 + 10}%"></div></div>
+            <h2 style="color:var(--secondary);">สิ่งที่เกิดขึ้น...</h2>
+            <div class="result-box">💬 ${resultText}</div>
+            <button class="btn btn-center" onclick="nextStep()">ลุยต่อ ➡️</button>
+        `;
+    }
+
+    function showReality() {
+        app.innerHTML = `
+            <div class="progress-container"><div id="progress-bar" style="width:95%; background-color:var(--error);"></div></div>
+            <h2 style="color:var(--error);">💀 ความจริงที่โคตรเจ็บ (The Reality)</h2>
+            <div class="result-box" style="border-left-color:var(--error); color:#fca5a5;">
+                ${currentFac.reality}
+            </div>
+            <button class="btn btn-center" onclick="showSummary()">ดูสภาพตอนจบวัน</button>
+        `;
+    }
+
+    function showSummary() {
+        app.innerHTML = `
+            <div class="progress-container"><div id="progress-bar" style="width:100%;"></div></div>
+            <h2>📊 สภาพหลังจบวัน</h2>
+            <div class="result-box" style="background:#1e293b; border:1px solid #334155;">
+                <p style="margin:5px 0;"><strong>📍 สรุปภารกิจ:</strong> <br>${currentFac.summary}</p>
+                <p style="margin:15px 0 5px 0;"><strong>🔥 ความเยิน:</strong> <br>${currentFac.diff}</p>
+            </div>
+            
+            <h3 style="text-align:center; font-size:1.1rem; margin-top:25px;">รู้สึกไงบ้างกับคณะนี้?</h3>
+            <div class="emoji-vote">
+                <button class="vote-btn" onclick="voted('ชิลจัดดด 😎')">😎 ชิลๆ</button>
+                <button class="vote-btn" onclick="voted('รอดตายหวุดหวิด 🫠')">🫠 พอไหว</button>
+                <button class="vote-btn" onclick="voted('ขิตแน่นอน 😵')">😵 ไม่รอดแน่</button>
+            </div>
+            
+            <button class="back-btn" style="margin-top:30px; font-size:1rem;" onclick="showHome()">🔄 กลับไปเลือกคณะใหม่</button>
+        `;
+    }
+
+    function voted(msg) {
+        alert("คุณโหวตว่า: " + msg + "\n\nขอบคุณที่มาลองเล่นแคมเปญนี้ครับ สู้ๆ กับชีวิตมหาลัยนะเว้ย!");
+    }
+
+    // เรียกหน้าแรกให้ทำงาน
+    showHome();
+</script>
+
+</body>
+</html>
